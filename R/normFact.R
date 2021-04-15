@@ -80,9 +80,7 @@ normFact <- function(fact,X,ref,refType,k=20,t=0.5,ref2=NULL,refType2=NULL,t2=0.
 
   print(paste("Removing",length(idx),"components with P value less than",t))
 
-
   Xn = X - bestcmptA%*% t(bestcmptB)
-
 
   R2=factR2$allR2
   if (!is.null(ref2)){
@@ -92,4 +90,6 @@ normFact <- function(fact,X,ref,refType,k=20,t=0.5,ref2=NULL,refType2=NULL,t2=0.
   return(list(Xn=Xn,R2=R2,bestSV =bestcmptB,A=A,B=B))
 
 }
+
+
 
