@@ -199,7 +199,7 @@
 #' }
 
 
-WaveICA<-function(data,wf="haar",batch,group=NULL,K=20,t=0.05,t2=0.05,alpha=0){
+WaveICA<-function(data,wf="haar",batch,group=NULL,K=20,t=0.05,t2=0.05,alpha=0, cl=cl){
   ### Wavelet Decomposition
   library(waveslim)
   level<-floor(log(nrow(data),2))
@@ -210,30 +210,57 @@ WaveICA<-function(data,wf="haar",batch,group=NULL,K=20,t=0.05,t2=0.05,alpha=0){
   for (k in 1:(level+1)){
     coef[[k]] <-matrix(NA,nrow(data),ncol(data))
   }
+
+  cat("#### Decomposition ####\n")
+  pb = pbapply::startpb(0, ncol(data))
   for (j in 1:ncol(data)){
-    cat(paste("######Decomposition",j,"########\n"))
+    #cat(paste("######Decomposition",j,"########\n"))
     data_temp<-data[,j]
     x_modwt<-modwt(data_temp,wf=wf,n.levels =level)
     for (k in 1:(level+1)){
       coef[[k]][,j]<-x_modwt[[k]]
     }
+    pbapply::setpb(pb, j)
   }
+  cat("\n")
+
   ##### ICA
   index<-level+1
-  data_wave_ICA<-list()
-  for (i in (1:index)){
-    cat(paste("######### ICA",i,"#############\n"))
-    data_coef<-coef[[i]]
-    data_coef_ICA<-normFact(fact="stICA",X=t(data_coef),ref=batch,refType ="categorical",k=K,t=t,ref2=group,refType2="categorical",t2=t2,alpha)
-    data_wave_ICA[[i]]<-t(data_coef_ICA$Xn)
+  if(length(cl) > 1){
+    cat("##### Performing ICA #####\n")
   }
+  data_wave_ICA <- pbapply::pblapply(1:index, cl=cl, function(i, batch, coef, K, t, group, t2, alpha){
+    data_coef<-coef[[i]]
+    data_coef_ICA<-WaveICA:::normFact(fact="stICA",
+                                      X=t(data_coef),
+                                      ref=batch,
+                                      refType ="categorical",
+                                      k=K,t=t,
+                                      ref2=group,
+                                      refType2="categorical",
+                                      t2=t2,alpha)
+    t(data_coef_ICA$Xn)
+  }, batch=batch, coef=coef, K=K, t=t, group=group, t2=t2, alpha=alpha)
+  cat("\n")
+  # OLD NONPARALLEL
+  # data_wave_ICA<-list()
+  # for (i in (1:index)){
+  #   cat(paste("######### ICA",i,"#############\n"))
+  #   data_coef<-coef[[i]]
+  #   data_coef_ICA<-normFact(fact="stICA",X=t(data_coef),ref=batch,refType ="categorical",k=K,t=t,ref2=group,refType2="categorical",t2=t2,alpha)
+  #   data_wave_ICA[[i]]<-t(data_coef_ICA$Xn)
+  # }
+
   ### Wavelet Reconstruction
   index<-ncol(data)
   index1<-length(data_wave_ICA)
   data_coef<-matrix(NA,nrow(data_wave_ICA[[1]]),index1)
   data_wave<-matrix(NA,nrow(data_wave_ICA[[1]]),ncol(data_wave_ICA[[1]]))
+
+  cat("#### Reconstruction ####\n")
+  pb = pbapply::startpb(0, index)
   for (i in 1:index){
-    cat(paste("######Reconstruction",i,"########\n"))
+    #cat(paste("######Reconstruction",i,"########\n"))
     for (j in 1:index1){
       data_coef[,j]<-data_wave_ICA[[j]][,i]
     }
@@ -245,11 +272,10 @@ WaveICA<-function(data,wf="haar",batch,group=NULL,K=20,t=0.05,t2=0.05,alpha=0){
     attributes(y)$wavelet<-wf
     attributes(y)$boundary<-"periodic"
     data_wave[,i]<-imodwt(y)+mean(data_temp)
+    pbapply::setpb(pb, i)
   }
+  cat("\n")
   rownames(data_wave)<-rownames(data)
   colnames(data_wave)<-colnames(data)
   return(list(data_wave=data_wave))
 }
-
-
-
